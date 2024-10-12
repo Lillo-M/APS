@@ -9,38 +9,12 @@ from imgui.integrations.pygame import PygameRenderer
 import pygame, sys
 from random import randint, uniform
 from math import sqrt, cos, pi, sin
-pygame.init()
 
-imgui.create_context()
-imgui.get_io().display_size = 200, 100
-imgui.get_io().fonts.get_tex_data_as_rgba32()
-
-impl = PygameRenderer()
-screen_size = 1920, 1000
-width = 1920
-height = 980
-fps = 60
-
-nVTG_x = 0.0
-nVTG_y = 0.0
-        
-nVector_x = 0.0
-nVector_y = 0.0
-
-balls = []
-
-font = pygame.font.SysFont("Arial", 18)
-
-clock = pygame.time.Clock()
-
-screen = pygame.display.set_mode(screen_size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.OPENGL | pygame.RESIZABLE)
-
-bg_img = pygame.image.load('back_ground_img.jpg').convert()
-bg_img = pygame.transform.scale(bg_img,(screen_size))
-
-def draw_circle(x, y, radius, segments):
-    gl.glBegin(gl.GL_LINE_LOOP)
-    for i in range(segments):
+def draw_circle(x, y, radius, segments, color):
+    gl.glColor3f(color[0], color[1], color[2])
+    gl.glBegin(gl.GL_TRIANGLE_FAN)
+    gl.glVertex2f(x, y)
+    for i in range(segments + 1):
         angle = 2 * pi * i / segments
         circle_x = x + radius * cos(angle)  # Adiciona o deslocamento x
         circle_y = y + radius * sin(angle)  # Adiciona o deslocamento y
@@ -48,39 +22,48 @@ def draw_circle(x, y, radius, segments):
     gl.glEnd()
 
 class Ball:
+    width = -1
+    height = -1
     def __init__(self):
         self.size = randint(8, 16)
         self.mass = 3.14 * self.size * self.size * 0.001
-        self.velocity_x = uniform(-2, 2)
-        self.velocity_y = uniform(-2, 2)
-        self.color = (randint(0, 255), randint(0, 255), randint(0, 255))
+        self.velocity_x = uniform(-3, 3)
+        self.velocity_y = uniform(-3, 3)
+        random = randint(0,100000)
+        if random/100%10 < 5:
+            self.color = (uniform(0.3,1), uniform(0.3,1), uniform(0.3,1))
+        elif random%3 == 0:
+            self.color = (1, 0, 0)
+        elif random%3 == 1:
+            self.color = (0, 1, 0)
+        else:
+            self.color = (0, 0, 1)
         self.x = 0
         self.y = 0
         pass
     def draw(self):
-        #pygame.draw.circle(screen, self.color, (self.x, self.y), self.size)
-        draw_circle(self.x,self.y,self.size, 90)
+        draw_circle(self.x,self.y,self.size, 30, self.color)
     
     def move(self):
         self.x += self.velocity_x
         self.y += self.velocity_y
     def wallColision(self):
         #função para limitar as bolas ao tamanho da janela
-        if self.x <= self.size or self.x >= width - self.size:
+        if self.x <= self.size or self.x >= Ball.width - self.size:
             self.velocity_x = -self.velocity_x
-            if self.x > width - self.size: self.x = width - self.size
+            if self.x > Ball.width - self.size: self.x = Ball.width - self.size
             elif self.x < self.size: self.x = self.size
-        if self.y <= self.size or self.y >= height - self.size:
+        if self.y <= self.size or self.y >= Ball.height - self.size:
             self.velocity_y = -self.velocity_y
-            if self.y > height - self.size: self.y = height - self.size
+            if self.y > Ball.height - self.size: self.y = Ball.height - self.size
             elif self.y < self.size: self.y = self.size
             # se a bola estiver fora ou encostando nas bordas, a velocidade dela é simplesmente invertida (supondo que a massa das bordas sejam infinitas)
             
 
-def ballSpawn(ball): # função para impedir que as bolas começem enconstadas ou sobrepostas
+def ballSpawn(ball, balls): # função para impedir que as bolas começem enconstadas ou sobrepostas
     spawnoccupied = False
-    x = randint(32, width - 32)
-    y = randint(32, height - 32)
+    x = randint(32, Ball.width - 32)
+    y = randint(32, Ball.height - 32)
     for i in balls:
         if i != ball:
             xi = i.x
@@ -108,6 +91,10 @@ def sweepPrune(ball, llist, cont): # função que checa possiveis colisões e re
 
 def collisionDetection(ball, balls, cont): # função que detecta colisão e calcula a física envolvida caso haja colisão
         cols = 0
+        nVTG_x = 0.0
+        nVTG_y = 0.0
+        nVector_x = 0.0
+        nVector_y = 0.0
         sweep = sweepPrune(ball, balls, cont)
         for i in sweep:
             if ball == i: 
@@ -150,44 +137,34 @@ def collisionDetection(ball, balls, cont): # função que detecta colisão e cal
 
 def updateCollisions(coll): # Imprime na tela quantas colisões até o momento
     collisions = str(int(coll))
-    collision_Text = font.render(collisions, 1, (100, 255, 100)) 
-    screen.blit(font.render("Collisions ", 1, (100, 255, 100)), (10, 10))
-    screen.blit((collision_Text) , (80, 10))
+    imgui.text("collisions: " + collisions)
 
-def updateFPS(): # Imprime na tela quantos Frames Por Segundo
+def updateFPS(clock): # Imprime na tela quantos Frames Por Segundo
     fPS = str(int(clock.get_fps()))
     imgui.text("FPS: " + fPS)
-    #fPSText = font.render(fPS, 1, (255, 100, 100))
-    #screen.blit(font.render("FPS ", 1, (255, 100, 100)), (10, 30))
-    #screen.blit((fPSText) , (50, 30))
 
 def updateKinetics(kinectics): # Imprime na tela a energia cinética total do sistema
     kinetics = str(float( "%.2f" % kinectics))
     imgui.text("Kinetics(J): " + kinetics)
-    #kineticsText = font.render(kinetics, 1, (100, 100, 255))
-    #screen.blit(font.render("Kinetics(J) ", 1, (100, 100, 255)), (10, 50))
-    #screen.blit((kineticsText) , (80, 50))
 
 def updateMomentum(momentum, momentum1): # Imprime na tela o momento linear em x e y total do sistema
     momentum = str(float( "%.2f" % momentum))
-    #momentumText = font.render(momentum, 1, (10, 150, 255))
     momentum1 = str(float( "%.2f" % momentum1))
-    #momentum1Text = font.render(momentum1, 1, (10, 150, 255))
     imgui.text("Momentum x: " + momentum)
     imgui.text("Momentum y: " + momentum1)
-    #screen.blit(font.render("Momentum_X,Y(Kg m/s) ", 1, (10, 150, 255)), (10, 70))
-    #screen.blit((momentumText) , (175, 70))
-    #screen.blit((momentum1Text) , (225, 70))
     
-def SpawnXBalls(qt_Balls):
+def SpawnXBalls(qt_Balls, balls):
     prv_last_ball = len(balls)
-    for i in range(qt_Balls): # cria uma lista com todas as bolas pedidas
-            balls.append(Ball())
-
     for i in range(prv_last_ball, prv_last_ball + qt_Balls): # Coloca as bolas em lugares diferentes e randomizados
         spawnDone = 0
-        while spawnDone == 0:
-            spawnDone = ballSpawn(balls[i])
+        attempts = 0
+        balls.append(Ball())
+        while spawnDone == 0 and attempts < 300:
+            spawnDone = ballSpawn(balls[i], balls)
+            attempts += 1
+        if attempts >= 300:
+            balls.pop()
+            break
 
 def main():
     kinetics = 0
@@ -196,20 +173,35 @@ def main():
     cont = 1
     collisions = 0
     input_Qt_Balls = 0
+    pygame.init()
+
+    screen_size = 800, 600
+    width = screen_size[0]
+    height = screen_size[1] - 20
+    Ball.width = width
+    Ball.height = height
+    fps = 60
+    balls = []
+    clock = pygame.time.Clock()
+    imgui.create_context()
+    screen = pygame.display.set_mode(screen_size, pygame.DOUBLEBUF  | pygame.OPENGL | pygame.RESIZABLE)
+    impl = PygameRenderer()
+    gl.glEnable(gl.GL_MULTISAMPLE)
     gluOrtho2D(0, screen_size[0], 0, screen_size[1])
     isRunning = True
     while isRunning:
+        imgui.get_io().display_size = screen_size
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 print('collisions: ', collisions)
                 sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                screen_size = event.dict['size']
+
             impl.process_event(event)
         impl.process_inputs()       
         imgui.new_frame()
-        
-
         clock.tick(fps)
-        #screen.blit(bg_img,(0,0))
         gl.glClearColor(0.1, 0.1, 0.1, 1)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
         cont = 1
@@ -227,22 +219,22 @@ def main():
             
             ball.draw()
             ball.move()
-        imgui.set_window_size_named("Status Menu", 180, 180)
+        imgui.set_window_size_named("Status Menu", 180, 185)
         imgui.begin_main_menu_bar()
         imgui.text("Collision Simulator Between Particles")
-        imgui.push_item_width(-100)
-        if (imgui.button("X")):
-            isRunning = False
         imgui.end_main_menu_bar()
         imgui.begin("Status Menu", False, imgui.core.WINDOW_NO_RESIZE)
         imgui.text("Balls:")
         imgui.same_line()
+        imgui.push_item_width(75)
         input_Qt_Balls = imgui.input_int("", input_Qt_Balls)[1]
+        if input_Qt_Balls < 0: input_Qt_Balls = 0
+        if input_Qt_Balls > 300: input_Qt_Balls = 300
         if imgui.button("Spawn Balls"):
-            SpawnXBalls(input_Qt_Balls)
+            SpawnXBalls(input_Qt_Balls, balls)
         if imgui.button("Clear Balls"):
             balls.clear()
-        updateFPS()
+        updateFPS(clock)
         updateCollisions(collisions)
         updateMomentum(momentum_x, momentum_y)
         updateKinetics(kinetics)
